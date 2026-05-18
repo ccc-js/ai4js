@@ -1,0 +1,24 @@
+{
+  "name": "nn4js",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint src/**/*.js tests/**/*.js",
+    "build": "node esbuild.config.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "ndarray": "^1.0.19"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "eslint": "^10.4.0",
+    "jest": "^30.4.2",
+    "prettier": "^3.8.3"
+  }
+}
