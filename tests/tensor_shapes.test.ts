@@ -1,4 +1,5 @@
-const { Tensor, cat } = require('../src/nn/tensor.js');
+import { Tensor } from '../src/nn/tensor.js';
+import { cat } from '../src/nn/tensor.js';
 
 describe('v0.3: 張量形狀操作與激活函數', () => {
   describe('transpose', () => {

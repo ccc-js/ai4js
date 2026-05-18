@@ -1,9 +1,16 @@
-const { Tensor, cat } = require('./tensor.js');
-const { Module, Linear, Embedding, RMSNorm } = require('./nn.js');
-const ndarray = require('ndarray');
+import { Tensor, cat } from './tensor.js';
+import { Module, Linear, Embedding, RMSNorm } from './nn.js';
+import ndarray from 'ndarray';
 
-class CausalSelfAttention extends Module {
-  constructor(n_embd, n_head) {
+export class CausalSelfAttention extends Module {
+  n_head: number;
+  head_dim: number;
+  wq: Linear;
+  wk: Linear;
+  wv: Linear;
+  wo: Linear;
+
+  constructor(n_embd: number, n_head: number) {
     super();
     this.n_head = n_head;
     this.head_dim = n_embd / n_head;
@@ -14,7 +21,7 @@ class CausalSelfAttention extends Module {
     this.wo = new Linear(n_embd, n_embd);
   }
 
-  __call__(x, kv_cache = null) {
+  __call__(x: Tensor, kv_cache: [Tensor, Tensor] | null = null): [Tensor, [Tensor, Tensor]] {
     const B = x.data.shape[0];
     const T = x.data.shape[1];
     const C = x.data.shape[2];
@@ -65,14 +72,17 @@ class CausalSelfAttention extends Module {
   }
 }
 
-class MLP extends Module {
-  constructor(n_embd) {
+export class MLP extends Module {
+  fc1: Linear;
+  fc2: Linear;
+
+  constructor(n_embd: number) {
     super();
     this.fc1 = new Linear(n_embd, 4 * n_embd);
     this.fc2 = new Linear(4 * n_embd, n_embd);
   }
 
-  __call__(x) {
+  __call__(x: Tensor): Tensor {
     let out = this.fc1.__call__(x);
     out = out.relu();
     out = this.fc2.__call__(out);
@@ -80,8 +90,13 @@ class MLP extends Module {
   }
 }
 
-class Block extends Module {
-  constructor(n_embd, n_head) {
+export class Block extends Module {
+  attn: CausalSelfAttention;
+  mlp: MLP;
+  ln1: RMSNorm;
+  ln2: RMSNorm;
+
+  constructor(n_embd: number, n_head: number) {
     super();
     this.attn = new CausalSelfAttention(n_embd, n_head);
     this.mlp = new MLP(n_embd);
@@ -89,7 +104,7 @@ class Block extends Module {
     this.ln2 = new RMSNorm(n_embd);
   }
 
-  __call__(x, kv_cache = null) {
+  __call__(x: Tensor, kv_cache: [Tensor, Tensor] | null = null): [Tensor, [Tensor, Tensor]] {
     const [attn_out, new_cache] = this.attn.__call__(this.ln1.__call__(x), kv_cache);
     let out = x.add(attn_out);
     out = out.add(this.mlp.__call__(this.ln2.__call__(out)));
@@ -97,8 +112,15 @@ class Block extends Module {
   }
 }
 
-class GPT extends Module {
-  constructor(vocab_size, block_size, n_layer = 1, n_embd = 16, n_head = 4) {
+export class GPT extends Module {
+  block_size: number;
+  wte: Embedding;
+  wpe: Embedding;
+  blocks: Block[];
+  ln_f: RMSNorm;
+  lm_head: Linear;
+
+  constructor(vocab_size: number, block_size: number, n_layer = 1, n_embd = 16, n_head = 4) {
     super();
     this.block_size = block_size;
     this.wte = new Embedding(vocab_size, n_embd);
@@ -111,13 +133,13 @@ class GPT extends Module {
     this.lm_head = new Linear(n_embd, vocab_size);
   }
 
-  __call__(idx, kv_caches = null) {
+  __call__(idx: Tensor, kv_caches: [Tensor, [Tensor, Tensor]][] | null = null): [Tensor, [Tensor, [Tensor, Tensor]][]] {
     const B = idx.data.shape[0];
     const T = idx.data.shape[1];
 
     let past_len = 0;
     if (kv_caches !== null) {
-      past_len = kv_caches[0][0].data.shape[2];
+      past_len = kv_caches[0][1][0].data.shape[2];
     }
 
     const posData = new Float32Array(B * T);
@@ -132,15 +154,15 @@ class GPT extends Module {
     const pos_emb = this.wpe.__call__(posTensor);
     let x = tok_emb.add(pos_emb);
 
-    let new_caches = [];
+    const new_caches: [Tensor, [Tensor, Tensor]][] = [];
     for (let i = 0; i < this.blocks.length; i++) {
-      let layer_cache = null;
+      let layer_cache: [Tensor, Tensor] | null = null;
       if (kv_caches !== null) {
-        layer_cache = kv_caches[i];
+        layer_cache = kv_caches[i][1];
       }
       const [block_out, new_cache] = this.blocks[i].__call__(x, layer_cache);
       x = block_out;
-      new_caches.push(new_cache);
+      new_caches.push([x, new_cache]);
     }
 
     x = this.ln_f.__call__(x);
@@ -149,5 +171,3 @@ class GPT extends Module {
     return [logits, new_caches];
   }
 }
-
-module.exports = { CausalSelfAttention, MLP, Block, GPT };

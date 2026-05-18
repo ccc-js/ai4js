@@ -1,16 +1,18 @@
-const { Tensor } = require('../src/nn/tensor.js');
-const { Module, Linear, Adam, setSeed } = require('../src/nn/nn.js');
+import { Tensor } from '../src/nn/tensor.js';
+import { Module, Linear, Adam, setSeed } from '../src/nn/nn.js';
 
 describe('Linear Regression', () => {
   beforeEach(() => setSeed(42));
 
   test('single linear layer can learn y = 2x + 1', () => {
     class LinearReg extends Module {
+      linear: Linear;
+
       constructor() {
         super();
         this.linear = new Linear(1, 1, true);
       }
-      __call__(x) {
+      __call__(x: Tensor): Tensor {
         return this.linear.__call__(x);
       }
     }
@@ -20,7 +22,7 @@ describe('Linear Regression', () => {
 
     const trueW = 2, trueB = 1;
     const nSamples = 30;
-    const xData = [], yData = [];
+    const xData: number[] = [], yData: number[] = [];
 
     for (let i = 0; i < nSamples; i++) {
       const x = Math.random() * 5;
@@ -55,12 +57,15 @@ describe('XOR Problem', () => {
 
   test('neural network can learn XOR', () => {
     class XORNet extends Module {
+      fc1: Linear;
+      fc2: Linear;
+
       constructor() {
         super();
         this.fc1 = new Linear(2, 8);
         this.fc2 = new Linear(8, 1);
       }
-      __call__(x) {
+      __call__(x: Tensor): Tensor {
         let out = this.fc1.__call__(x).relu();
         out = this.fc2.__call__(out);
         return out;
@@ -70,7 +75,7 @@ describe('XOR Problem', () => {
     const model = new XORNet();
     const optimizer = new Adam(model.parameters(), 0.1);
 
-    const xorData = [
+    const xorData: [number[][][], number[][][]] = [
       [[[0, 0]], [[0]]],
       [[[0, 1]], [[1]]],
       [[[1, 0]], [[1]]],
@@ -107,12 +112,15 @@ describe('Pattern Classification', () => {
 
   test('network can classify left vs right pattern', () => {
     class PatternNet extends Module {
+      fc1: Linear;
+      fc2: Linear;
+
       constructor() {
         super();
         this.fc1 = new Linear(64, 32);
         this.fc2 = new Linear(32, 2);
       }
-      __call__(x) {
+      __call__(x: Tensor): Tensor {
         let out = this.fc1.__call__(x).relu();
         out = this.fc2.__call__(out);
         return out;
@@ -122,8 +130,8 @@ describe('Pattern Classification', () => {
     const model = new PatternNet();
     const optimizer = new Adam(model.parameters(), 0.1);
 
-    const trainData = [];
-    const trainLabels = [];
+    const trainData: number[][] = [];
+    const trainLabels: number[] = [];
 
     for (let i = 0; i < 60; i++) {
       const data = new Array(64).fill(0);
@@ -170,4 +178,3 @@ describe('Pattern Classification', () => {
     expect(correct).toBeGreaterThanOrEqual(2);
   });
 });
-

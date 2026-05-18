@@ -1,10 +1,19 @@
-const { Tensor } = require('./tensor.js');
-const { Adam } = require('./nn.js');
-const { GPT } = require('./gpt.js');
+import { Tensor } from './tensor.js';
+import { Adam } from './nn.js';
+import { GPT } from './gpt.js';
+import ndarray from 'ndarray';
 
-function train_model(model, optimizer, docs, uchars, BOS, block_size, num_steps = 100) {
+export function train_model(
+  model: InstanceType<typeof GPT>,
+  optimizer: Adam,
+  docs: string[],
+  uchars: string[],
+  BOS: number,
+  block_size: number,
+  num_steps = 100
+): InstanceType<typeof GPT> {
   const params = model.parameters();
-  const charToIdx = {};
+  const charToIdx: Record<string, number> = {};
   for (let i = 0; i < uchars.length; i++) {
     charToIdx[uchars[i]] = i;
   }
@@ -65,14 +74,22 @@ function train_model(model, optimizer, docs, uchars, BOS, block_size, num_steps 
   return model;
 }
 
-function generate_samples(model, uchars, BOS, vocab_size, block_size, num_samples = 5, temperature = 0.5) {
+export function generate_samples(
+  model: InstanceType<typeof GPT>,
+  uchars: string[],
+  BOS: number,
+  vocab_size: number,
+  block_size: number,
+  num_samples = 5,
+  temperature = 0.5
+): string[] {
   console.log('\n--- inference ---');
-  const results = [];
+  const results: string[] = [];
 
   for (let sample_idx = 0; sample_idx < num_samples; sample_idx++) {
     let current_token = BOS;
-    const sample = [];
-    let kv_caches = null;
+    const sample: string[] = [];
+    let kv_caches: [Tensor, [Tensor, Tensor]][] | null = null;
 
     for (let pos_id = 0; pos_id < block_size; pos_id++) {
       const x = new Tensor(toNdarray([current_token], [1, 1]), [], false);
@@ -89,7 +106,7 @@ function generate_samples(model, uchars, BOS, vocab_size, block_size, num_sample
         sumExp += exps[v];
       }
 
-      const probs = exps.map(e => e / sumExp);
+      const probs = Array.from(exps).map((e) => e / sumExp);
 
       let r = Math.random();
       let next_token = 0;
@@ -115,10 +132,6 @@ function generate_samples(model, uchars, BOS, vocab_size, block_size, num_sample
   return results;
 }
 
-const ndarray = require('ndarray');
-
-function toNdarray(data, shape) {
+function toNdarray(data: number[], shape: number[]): any {
   return ndarray(new Float32Array(data), shape);
 }
-
-module.exports = { train_model, generate_samples };

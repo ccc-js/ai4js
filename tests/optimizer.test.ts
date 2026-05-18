@@ -1,5 +1,5 @@
-const { Module, Linear, Embedding, RMSNorm, Adam } = require('../src/nn/nn.js');
-const { Tensor } = require('../src/nn/tensor.js');
+import { Tensor } from '../src/nn/tensor.js';
+import { Module, Linear, Embedding, RMSNorm, Adam } from '../src/nn/nn.js';
 
 describe('v0.5: 正規化與優化器', () => {
   describe('RMSNorm', () => {
@@ -24,7 +24,7 @@ describe('v0.5: 正規化與優化器', () => {
     test('Adam 建立', () => {
       const layer = new Linear(3, 2);
       const params = layer.parameters();
-      const opt = new Adam(params, lr = 0.01);
+      const opt = new Adam(params, 0.01);
       expect(opt.params.length).toBe(1);
       expect(opt.t).toBe(0);
     });
@@ -32,7 +32,7 @@ describe('v0.5: 正規化與優化器', () => {
     test('Adam step 更新參數', () => {
       const layer = new Linear(3, 2, true);
       const params = layer.parameters();
-      const opt = new Adam(params, lr = 0.1);
+      const opt = new Adam(params, 0.1);
 
       const x = new Tensor([[1, 2, 3]], [], true);
       const out = layer.__call__(x);
@@ -55,7 +55,7 @@ describe('v0.5: 正規化與優化器', () => {
     test('Adam zero_grad', () => {
       const layer = new Linear(3, 2);
       const params = layer.parameters();
-      const opt = new Adam(params, lr = 0.01);
+      const opt = new Adam(params, 0.01);
 
       const x = new Tensor([[1, 2, 3]], [], true);
       const out = layer.__call__(x);

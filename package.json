@@ -5,8 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "lint": "eslint src/**/*.js tests/**/*.js",
-    "build": "node esbuild.config.js"
+    "lint": "eslint src/**/*.ts tests/**/*.ts",
+    "build": "tsc && node esbuild.config.js",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
@@ -16,9 +17,32 @@
     "ndarray": "^1.0.19"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/ndarray": "^1.0.14",
+    "@types/node": "^22.10.0",
     "esbuild": "^0.28.0",
     "eslint": "^10.4.0",
     "jest": "^30.4.2",
-    "prettier": "^3.8.3"
+    "prettier": "^3.8.3",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.2"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "moduleFileExtensions": [
+      "ts",
+      "js",
+      "json"
+    ],
+    "testMatch": [
+      "**/tests/**/*.test.ts"
+    ],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    },
+    "transform": {
+      "^.+\\.tsx?$": ["ts-jest", { "diagnostics": false }]
+    }
   }
 }

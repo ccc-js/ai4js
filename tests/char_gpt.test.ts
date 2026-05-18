@@ -1,6 +1,6 @@
-const { train_model, generate_samples } = require('../src/nn/chargpt.js');
-const { GPT } = require('../src/nn/gpt.js');
-const { Adam, setSeed } = require('../src/nn/nn.js');
+import { train_model, generate_samples } from '../src/nn/chargpt.js';
+import { GPT } from '../src/nn/gpt.js';
+import { Adam, setSeed } from '../src/nn/nn.js';
 
 describe('CharGPT Chinese Training', () => {
   beforeEach(() => setSeed(42));

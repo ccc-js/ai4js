@@ -1,5 +1,5 @@
-const { CausalSelfAttention, MLP, Block, GPT } = require('../src/nn/gpt.js');
-const { Tensor } = require('../src/nn/tensor.js');
+import { Tensor } from '../src/nn/tensor.js';
+import { CausalSelfAttention, MLP, Block, GPT } from '../src/nn/gpt.js';
 
 describe('v0.6: 自注意力機制', () => {
   describe('CausalSelfAttention', () => {

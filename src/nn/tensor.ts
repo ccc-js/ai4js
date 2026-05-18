@@ -1,11 +1,19 @@
-const ndarray = require('ndarray');
+import ndarray from 'ndarray';
 
-function computeSize(shape) {
+interface DataContainer {
+  shape: number[];
+  data: any;
+  size: number;
+}
+
+type NdArray = any;
+
+function computeSize(shape: number[]): number {
   return shape.length === 0 ? 1 : shape.reduce((a, b) => a * b, 1);
 }
 
-function computeStrides(shape) {
-  const strides = new Array(shape.length);
+function computeStrides(shape: number[]): number[] {
+  const strides = new Array<number>(shape.length);
   let stride = 1;
   for (let i = shape.length - 1; i >= 0; i--) {
     strides[i] = stride;
@@ -14,10 +22,10 @@ function computeStrides(shape) {
   return strides;
 }
 
-function unravelIndex(index, shape) {
+function unravelIndex(index: number, shape: number[]): number[] {
   if (shape.length === 0) return [];
   const strides = computeStrides(shape);
-  const indices = new Array(shape.length);
+  const indices = new Array<number>(shape.length);
   let remaining = index;
   for (let i = 0; i < shape.length; i++) {
     indices[i] = Math.floor(remaining / strides[i]) % shape[i];
@@ -26,7 +34,7 @@ function unravelIndex(index, shape) {
   return indices;
 }
 
-function ravelIndex(indices, shape) {
+function ravelIndex(indices: number[], shape: number[]): number {
   if (shape.length === 0) return 0;
   const strides = computeStrides(shape);
   let flat = 0;
@@ -36,9 +44,9 @@ function ravelIndex(indices, shape) {
   return flat;
 }
 
-function broadcastShapes(shapeA, shapeB) {
+function broadcastShapes(shapeA: number[], shapeB: number[]): number[] {
   const len = Math.max(shapeA.length, shapeB.length);
-  const result = new Array(len);
+  const result = new Array<number>(len);
   for (let i = 0; i < len; i++) {
     const a = shapeA[shapeA.length - 1 - i] ?? 1;
     const b = shapeB[shapeB.length - 1 - i] ?? 1;
@@ -50,17 +58,17 @@ function broadcastShapes(shapeA, shapeB) {
   return result;
 }
 
-function broadcastIndices(outIndices, srcShape) {
+function broadcastIndices(outIndices: number[], srcShape: number[]): number[] {
   const offset = outIndices.length - srcShape.length;
-  const srcIndices = new Array(srcShape.length);
+  const srcIndices = new Array<number>(srcShape.length);
   for (let i = 0; i < srcShape.length; i++) {
     srcIndices[i] = srcShape[i] === 1 ? 0 : outIndices[offset + i];
   }
   return srcIndices;
 }
 
-function getNestedArrayShape(arr) {
-  const shape = [];
+function getNestedArrayShape(arr: unknown): number[] {
+  const shape: number[] = [];
   let current = arr;
   while (Array.isArray(current)) {
     shape.push(current.length);
@@ -70,10 +78,10 @@ function getNestedArrayShape(arr) {
       break;
     }
   }
-  return shape.length > 0 ? shape : [arr.length];
+  return shape.length > 0 ? shape : [(arr as unknown[]).length];
 }
 
-function broadcastTo(tensor, targetShape) {
+function broadcastTo(tensor: Tensor, targetShape: number[]): NdArray {
   const srcShape = tensor.data.shape.slice();
   const srcData = tensor.data.data;
   const targetSize = computeSize(targetShape);
@@ -87,7 +95,7 @@ function broadcastTo(tensor, targetShape) {
   return ndarray(result, targetShape);
 }
 
-function getIndex(arr, indices) {
+function getIndex(arr: DataContainer, indices: number[]): number {
   let idx = 0;
   let multiplier = 1;
   const ndim = arr.shape.length;
@@ -99,14 +107,14 @@ function getIndex(arr, indices) {
   return arr.data[idx];
 }
 
-function unbroadcast(grad, shape) {
+function unbroadcast(grad: DataContainer, shape: number[]): NdArray {
   const gradShape = grad.shape.slice();
   if (JSON.stringify(gradShape) === JSON.stringify(shape)) {
-    return grad;
+    return ndarray(grad.data, shape);
   }
 
   const outData = new Float32Array(computeSize(shape));
-  const paddedShape = Array(Math.max(0, gradShape.length - shape.length)).fill(1).concat(shape);
+  const paddedShape = Array<number>(Math.max(0, gradShape.length - shape.length)).fill(1).concat(shape);
 
   for (let i = 0; i < grad.data.length; i++) {
     const gradIndices = unravelIndex(i, gradShape);
@@ -118,16 +126,22 @@ function unbroadcast(grad, shape) {
   return ndarray(outData, shape.slice());
 }
 
-class Tensor {
-  constructor(data, _children = [], requires_grad = false) {
-    if (data && data.shape && data.data) {
-      this.data = data;
+export class Tensor {
+  data: NdArray;
+  grad: NdArray;
+  _backward: () => void;
+  _prev: Set<Tensor>;
+  requires_grad: boolean;
+
+  constructor(data: NdArray | Float32Array | number | unknown[], _children: Tensor[] = [], requires_grad = false) {
+    if (data && (data as NdArray).shape && (data as NdArray).data) {
+      this.data = data as NdArray;
     } else if (data instanceof Float32Array) {
       this.data = ndarray(data);
     } else if (typeof data === 'number') {
       this.data = ndarray(new Float32Array([data]));
     } else if (Array.isArray(data)) {
-      const flat = data.flat(Infinity);
+      const flat = (data as unknown[]).flat(Infinity) as number[];
       const shape = getNestedArrayShape(data);
       this.data = ndarray(new Float32Array(flat), shape);
     } else {
@@ -139,15 +153,14 @@ class Tensor {
     this.requires_grad = requires_grad;
   }
 
-  zero_grad() {
-    const size = this.grad.size;
-    this.grad = ndarray(new Float32Array(size), this.data.shape.slice());
+  zero_grad(): void {
+    this.grad = ndarray(new Float32Array(this.grad.size), this.data.shape.slice());
   }
 
-  backward() {
-    const topo = [];
-    const visited = new Set();
-    const build_topo = (v) => {
+  backward(): void {
+    const topo: Tensor[] = [];
+    const visited = new Set<Tensor>();
+    const build_topo = (v: Tensor): void => {
       if (!visited.has(v)) {
         visited.add(v);
         for (const child of v._prev) {
@@ -166,8 +179,8 @@ class Tensor {
     }
   }
 
-  add(other) {
-    const otherT = other instanceof Tensor ? other : new Tensor(other);
+  add(other: Tensor | number | unknown[]): Tensor {
+    const otherT = other instanceof Tensor ? other : new Tensor(other as Float32Array | number | unknown[]);
     const outShape = broadcastShapes(this.data.shape, otherT.data.shape);
     const selfBroadcast = broadcastTo(this, outShape);
     const otherBroadcast = broadcastTo(otherT, outShape);
@@ -195,8 +208,8 @@ class Tensor {
     return out;
   }
 
-  mul(other) {
-    const otherT = other instanceof Tensor ? other : new Tensor(other);
+mul(other: Tensor | number | unknown[]): Tensor {
+    const otherT = other instanceof Tensor ? other : new Tensor(other as Float32Array | number | unknown[]);
     const outShape = broadcastShapes(this.data.shape, otherT.data.shape);
     const selfBroadcast = broadcastTo(this, outShape);
     const otherBroadcast = broadcastTo(otherT, outShape);
@@ -232,8 +245,8 @@ class Tensor {
     return out;
   }
 
-  matmul(other) {
-    const otherT = other instanceof Tensor ? other : new Tensor(other);
+  matmul(other: Tensor | number | unknown[]): Tensor {
+    const otherT = other instanceof Tensor ? other : new Tensor(other as Float32Array | number | unknown[]);
     const a = this.data;
     const b = otherT.data;
     const aShape = a.shape.slice();
@@ -318,13 +331,13 @@ class Tensor {
     return out;
   }
 
-  transpose(...axes) {
+  transpose(...axes: number[]): Tensor {
     const shape = this.data.shape.slice();
-    let perm;
+    let perm: number[];
     if (axes.length === 2) {
       const idx1 = axes[0] < 0 ? shape.length + axes[0] : axes[0];
       const idx2 = axes[1] < 0 ? shape.length + axes[1] : axes[1];
-      perm = shape.map((_, i) => i);
+      perm = shape.map((_: number, i: number) => i);
       [perm[idx1], perm[idx2]] = [perm[idx2], perm[idx1]];
     } else if (axes.length === shape.length) {
       perm = axes.map((ax) => (ax < 0 ? shape.length + ax : ax));
@@ -338,7 +351,7 @@ class Tensor {
 
     for (let i = 0; i < outSize; i++) {
       const outIndices = unravelIndex(i, newShape);
-      const srcIndices = new Array(shape.length);
+      const srcIndices = new Array<number>(shape.length);
       for (let j = 0; j < perm.length; j++) {
         srcIndices[perm[j]] = outIndices[j];
       }
@@ -347,7 +360,7 @@ class Tensor {
 
     const out = new Tensor(ndarray(transData, newShape), [this], this.requires_grad);
     const self = this;
-    const inversePerm = new Array(perm.length);
+    const inversePerm = new Array<number>(perm.length);
     for (let i = 0; i < perm.length; i++) {
       inversePerm[perm[i]] = i;
     }
@@ -367,7 +380,7 @@ class Tensor {
     return out;
   }
 
-  reshape(...shape) {
+  reshape(...shape: number[]): Tensor {
     const newSize = shape.reduce((a, b) => a * b, 1);
     const outData = new Float32Array(newSize);
     for (let i = 0; i < newSize && i < this.data.size; i++) {
@@ -386,7 +399,7 @@ class Tensor {
     return out;
   }
 
-  relu() {
+  relu(): Tensor {
     const outData = new Float32Array(this.data.size);
     for (let i = 0; i < this.data.size; i++) {
       outData[i] = Math.max(0, this.data.data[i]);
@@ -405,8 +418,8 @@ class Tensor {
     return out;
   }
 
-  masked_fill(mask, value) {
-    const maskT = mask instanceof Tensor ? mask : new Tensor(mask);
+  masked_fill(mask: Tensor | unknown[], value: number): Tensor {
+    const maskT = mask instanceof Tensor ? mask : new Tensor(mask as Float32Array | number | unknown[]);
     const maskBroadcast = broadcastTo(maskT, this.data.shape.slice());
     const outData = new Float32Array(this.data.size);
     for (let i = 0; i < this.data.size; i++) {
@@ -426,7 +439,7 @@ class Tensor {
     return out;
   }
 
-  softmax(axis = -1) {
+  softmax(axis = -1): Tensor {
     const shape = this.data.shape;
     const axisPos = axis < 0 ? shape.length + axis : axis;
     const innerSize = shape[axisPos];
@@ -489,8 +502,8 @@ class Tensor {
     return out;
   }
 
-  cross_entropy(targets) {
-    const targetsT = targets instanceof Tensor ? targets : new Tensor(targets);
+  cross_entropy(targets: Tensor | unknown[]): Tensor {
+    const targetsT = targets instanceof Tensor ? targets : new Tensor(targets as Float32Array | number | unknown[]);
     const logits = this.data;
     const batchSize = targetsT.data.shape[0];
     const seqLen = targetsT.data.shape[1];
@@ -554,7 +567,7 @@ class Tensor {
   }
 }
 
-function cat(tensors, axis = 0) {
+export function cat(tensors: Tensor[], axis = 0): Tensor {
   const shapes = tensors.map((t) => t.data.shape);
   const outShape = shapes[0].slice();
   for (let i = 1; i < shapes.length; i++) {
@@ -600,5 +613,3 @@ function cat(tensors, axis = 0) {
   };
   return out;
 }
-
-module.exports = { Tensor, cat };

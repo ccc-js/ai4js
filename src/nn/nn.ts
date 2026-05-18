@@ -1,14 +1,18 @@
-const { Tensor } = require('./tensor.js');
-const ndarray = require('ndarray');
+import { Tensor } from './tensor.js';
+import ndarray from 'ndarray';
 
 let seed = 42;
-function srandom() {
+
+function srandom(): number {
   seed = (seed * 1103515245 + 12345) & 0x7fffffff;
   return seed / 0x7fffffff;
 }
-function setSeed(s) { seed = s; }
 
-function randomNormal(mean = 0, std = 1) {
+export function setSeed(s: number): void {
+  seed = s;
+}
+
+function randomNormal(mean = 0, std = 1): number {
   let u1 = 0;
   let u2 = 0;
   while (u1 === 0) u1 = srandom();
@@ -18,19 +22,19 @@ function randomNormal(mean = 0, std = 1) {
   return mean + std * z0;
 }
 
-class Module {
-  parameters() {
-    const params = [];
+export class Module {
+  parameters(): Tensor[] {
+    const params: Tensor[] = [];
     for (const key in this) {
-      const v = this[key];
-      if (v instanceof Tensor && v.requires_grad) {
+      const v = (this as Record<string, unknown>)[key];
+      if (v instanceof Tensor && (v as Tensor).requires_grad) {
         params.push(v);
       } else if (v instanceof Module) {
-        params.push(...v.parameters());
+        params.push(...(v as Module).parameters());
       } else if (Array.isArray(v)) {
-        for (const item of v) {
+        for (const item of v as unknown[]) {
           if (item instanceof Module) {
-            params.push(...item.parameters());
+            params.push(...(item as Module).parameters());
           }
         }
       }
@@ -39,8 +43,11 @@ class Module {
   }
 }
 
-class Linear extends Module {
-  constructor(in_features, out_features, bias = false) {
+export class Linear extends Module {
+  weight: Tensor;
+  bias: Tensor | null;
+
+  constructor(in_features: number, out_features: number, bias = false) {
     super();
     const std = 0.08;
     const weightData = new Float32Array(in_features * out_features);
@@ -57,7 +64,7 @@ class Linear extends Module {
     }
   }
 
-  __call__(x) {
+  __call__(x: Tensor): Tensor {
     let out = x.matmul(this.weight);
     if (this.bias !== null) {
       out = out.add(this.bias);
@@ -66,8 +73,10 @@ class Linear extends Module {
   }
 }
 
-class Embedding extends Module {
-  constructor(num_embeddings, embedding_dim) {
+export class Embedding extends Module {
+  weight: Tensor;
+
+  constructor(num_embeddings: number, embedding_dim: number) {
     super();
     const weightData = new Float32Array(num_embeddings * embedding_dim);
     for (let i = 0; i < weightData.length; i++) {
@@ -76,8 +85,8 @@ class Embedding extends Module {
     this.weight = new Tensor(ndarray(weightData, [num_embeddings, embedding_dim]), [], true);
   }
 
-  __call__(indices) {
-    const indicesT = indices instanceof Tensor ? indices : new Tensor(indices);
+  __call__(indices: Tensor): Tensor {
+    const indicesT = indices instanceof Tensor ? indices : new Tensor(indices as any);
     const num_embeddings = this.weight.data.shape[0];
     const embedding_dim = this.weight.data.shape[1];
 
@@ -119,18 +128,19 @@ class Embedding extends Module {
   }
 }
 
-class RMSNorm extends Module {
-  constructor(dim, eps = 1e-5) {
+export class RMSNorm extends Module {
+  eps: number;
+  scale: Tensor;
+
+  constructor(dim: number, eps = 1e-5) {
     super();
     this.eps = eps;
     const scaleData = new Float32Array(dim);
-    for (let i = 0; i < dim; i++) {
-      scaleData[i] = 1.0;
-    }
+    scaleData.fill(1.0);
     this.scale = new Tensor(ndarray(scaleData, [dim]), [], false);
   }
 
-  __call__(x) {
+  __call__(x: Tensor): Tensor {
     const xData = x.data;
     const lastDim = xData.shape[xData.shape.length - 1];
     const outerSize = xData.size / lastDim;
@@ -181,8 +191,17 @@ class RMSNorm extends Module {
   }
 }
 
-class Adam {
-  constructor(params, lr = 0.01, betas = [0.85, 0.99], eps = 1e-8) {
+export class Adam {
+  params: Tensor[];
+  lr: number;
+  beta1: number;
+  beta2: number;
+  eps: number;
+  m: Float32Array[];
+  v: Float32Array[];
+  t: number;
+
+  constructor(params: Tensor[], lr = 0.01, betas: [number, number] = [0.85, 0.99], eps = 1e-8) {
     this.params = params;
     this.lr = lr;
     this.beta1 = betas[0];
@@ -193,7 +212,7 @@ class Adam {
     this.t = 0;
   }
 
-  step() {
+  step(): void {
     this.t += 1;
     for (let i = 0; i < this.params.length; i++) {
       const p = this.params[i];
@@ -211,11 +230,9 @@ class Adam {
     }
   }
 
-  zero_grad() {
+  zero_grad(): void {
     for (const p of this.params) {
       p.zero_grad();
     }
   }
 }
-
-module.exports = { Module, Linear, Embedding, RMSNorm, Adam, setSeed };

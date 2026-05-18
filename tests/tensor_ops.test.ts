@@ -1,4 +1,4 @@
-const { Tensor } = require('../src/nn/tensor.js');
+import { Tensor } from '../src/nn/tensor.js';
 
 describe('v0.2: 張量運算與自動微分', () => {
   test('add：兩個張量相加', () => {
