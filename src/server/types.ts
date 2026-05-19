@@ -23,3 +23,32 @@ export interface SaveSnapshotResponse {
 export interface ListSnapshotsResponse {
   snapshots: SnapshotMetadata[];
 }
+
+export interface GymSnapshotMetadata {
+  id: string;
+  name: string;
+  env: 'CartPole' | 'FrozenLake';
+  created: number;
+  totalReward: number;
+  success: boolean;
+  steps: number;
+}
+
+export interface SaveGymSnapshotRequest {
+  name: string;
+  env: 'CartPole' | 'FrozenLake';
+  episodeRecord: EpisodeRecord;
+  totalReward: number;
+  success: boolean;
+}
+
+export interface EpisodeRecord {
+  observations: number[][];
+  actions: number[];
+  rewards: number[];
+  dones: boolean[];
+}
+
+export interface ListGymSnapshotsResponse {
+  snapshots: GymSnapshotMetadata[];
+}

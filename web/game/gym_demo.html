@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ai4js - Gym Replay</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    h1 { font-size: 2.5rem; color: #00d4ff; margin-bottom: 0.5rem; }
+    .subtitle { color: #888; margin-bottom: 2rem; font-size: 1.1rem; }
+    .demo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 1.5rem; }
+    .demo-card { background: #1a1a2e; border-radius: 12px; padding: 1.5rem; border: 1px solid #2a2a4a; }
+    .demo-card h2 { color: #00d4ff; margin-bottom: 1rem; font-size: 1.3rem; }
+    .demo-card p { color: #aaa; margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.5; }
+    button { background: #00d4ff; color: #0f0f1a; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+    button:hover { background: #00b8e6; transform: translateY(-1px); }
+    button:disabled { background: #444; cursor: not-allowed; transform: none; }
+    button.stop { background: #ff6b6b; }
+    button.stop:hover { background: #ff5252; }
+    canvas { background: #0f0f1a; border-radius: 6px; margin-top: 1rem; display: block; margin-left: auto; margin-right: auto; }
+    .controls { display: flex; gap: 0.5rem; margin: 1rem 0; flex-wrap: wrap; align-items: center; }
+    select, input[type="number"] { padding: 0.5rem; background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 4px; color: #e0e0e0; }
+    select { flex: 1; min-width: 150px; }
+    .info { background: #0f0f1a; padding: 0.75rem; border-radius: 6px; font-family: 'Fira Code', monospace; font-size: 0.85rem; margin-top: 1rem; white-space: pre-wrap; color: #7fdb7f; }
+    .info.error { color: #ff6b6b; }
+    .speed-control { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+    .speed-control label { color: #888; font-size: 0.85rem; }
+    .empty-state { text-align: center; padding: 2rem; color: #666; }
+    .empty-state h3 { color: #888; margin-bottom: 0.5rem; }
+    footer { text-align: center; padding: 2rem; color: #666; font-size: 0.85rem; margin-top: 2rem; border-top: 1px solid #2a2a4a; }
+    a { color: #00d4ff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Gym Replay</h1>
+    <p class="subtitle">載入訓練結果，播放動畫</p>
+
+    <div class="demo-grid">
+      <div class="demo-card">
+        <h2>CartPole</h2>
+        <p>平衡桿：控制小車保持桿子不倒下</p>
+        <select id="cartpoleSelect">
+          <option value="">-- 選擇訓練結果 --</option>
+        </select>
+        <canvas id="cartpoleCanvas" width="400" height="300"></canvas>
+        <div class="controls">
+          <button id="cartpolePlay">▶ Play</button>
+          <button id="cartpolePause">⏸ Pause</button>
+          <button id="cartpoleStop" class="stop">⏹ Stop</button>
+          <div class="speed-control">
+            <label>速度:</label>
+            <input type="number" id="cartpoleSpeed" value="50" min="10" max="500" style="width:60px">
+            <span style="color:#666;font-size:0.8rem">ms/step</span>
+          </div>
+        </div>
+        <div class="info" id="cartpoleInfo">等待選擇訓練結果...</div>
+      </div>
+
+      <div class="demo-card">
+        <h2>FrozenLake</h2>
+        <p>穿越湖泊：從起點走到終點，避免掉入洞中</p>
+        <select id="frozenLakeSelect">
+          <option value="">-- 選擇訓練結果 --</option>
+        </select>
+        <canvas id="frozenLakeCanvas" width="400" height="400"></canvas>
+        <div class="controls">
+          <button id="frozenLakePlay">▶ Play</button>
+          <button id="frozenLakePause">⏸ Pause</button>
+          <button id="frozenLakeStop" class="stop">⏹ Stop</button>
+          <div class="speed-control">
+            <label>速度:</label>
+            <input type="number" id="frozenLakeSpeed" value="50" min="10" max="500" style="width:60px">
+            <span style="color:#666;font-size:0.8rem">ms/step</span>
+          </div>
+        </div>
+        <div class="info" id="frozenLakeInfo">等待選擇訓練結果...</div>
+      </div>
+    </div>
+
+    <div class="demo-card" style="margin-top:1.5rem; background:#0f0f1a;">
+      <h2>儲存新的訓練結果</h2>
+      <p>使用 CLI 訓練並儲存：</p>
+      <pre style="background:#1a1a2e;padding:1rem;border-radius:6px;overflow-x:auto;font-size:0.85rem">
+# 訓練 CartPole (100 episodes)
+npx tsx src/cli/train.ts --env CartPole --episodes 100 --policy random --save
+
+# 訓練 FrozenLake
+npx tsx src/cli/train.ts --env FrozenLake --episodes 100 --policy random --save</pre>
+      <p style="margin-top:0.5rem;font-size:0.85rem;color:#888">
+        訓練後結果會自動上傳到伺服器。重新整理頁面即可看到新結果。
+      </p>
+    </div>
+
+    <footer>
+      <p>Built with <a href="https://github.com/cccnqu/ai4js">ai4js</a> - JavaScript AI/ML Framework</p>
+    </footer>
+  </div>
+
+  <script type="module">
+    import { GymReplay } from '../../src/gym/replay.js';
+
+    const API_BASE = 'http://localhost:3001';
+
+    async function loadGymSnapshots(env) {
+      try {
+        const res = await fetch(`${API_BASE}/api/gym?env=${env}`);
+        const data = await res.json();
+        return data.snapshots || [];
+      } catch {
+        return [];
+      }
+    }
+
+    async function loadGymSnapshot(id) {
+      const res = await fetch(`${API_BASE}/api/gym/${id}`);
+      const data = await res.json();
+      return data;
+    }
+
+    // ============ CartPole Renderer ============
+
+    const cartpoleCanvas = document.getElementById('cartpoleCanvas');
+    const cartpoleCtx = cartpoleCanvas.getContext('2d');
+    let cartpoleReplay = null;
+
+    function drawCartPole(state) {
+      const w = cartpoleCanvas.width;
+      const h = cartpoleCanvas.height;
+      cartpoleCtx.fillStyle = '#0f0f1a';
+      cartpoleCtx.fillRect(0, 0, w, h);
+
+      // Track
+      cartpoleCtx.strokeStyle = '#444';
+      cartpoleCtx.lineWidth = 2;
+      cartpoleCtx.beginPath();
+      cartpoleCtx.moveTo(50, h - 60);
+      cartpoleCtx.lineTo(w - 50, h - 60);
+      cartpoleCtx.stroke();
+
+      // Ground markers
+      cartpoleCtx.fillStyle = '#333';
+      for (let i = 0; i <= 10; i++) {
+        const x = 50 + (w - 100) * i / 10;
+        cartpoleCtx.fillRect(x - 1, h - 63, 2, 6);
+      }
+
+      const cartX = w / 2 + state[0] * 60;
+      const cartY = h - 60;
+
+      // Cart
+      cartpoleCtx.fillStyle = '#00d4ff';
+      cartpoleCtx.fillRect(cartX - 35, cartY - 25, 70, 25);
+
+      // Wheels
+      cartpoleCtx.fillStyle = '#666';
+      cartpoleCtx.beginPath();
+      cartpoleCtx.arc(cartX - 20, cartY, 8, 0, Math.PI * 2);
+      cartpoleCtx.arc(cartX + 20, cartY, 8, 0, Math.PI * 2);
+      cartpoleCtx.fill();
+
+      // Pole
+      const poleLen = 80;
+      const poleEndX = cartX + Math.sin(state[2]) * poleLen;
+      const poleEndY = cartY - 25 - Math.cos(state[2]) * poleLen;
+
+      cartpoleCtx.strokeStyle = state[2] > 0.21 || state[2] < -0.21 ? '#ff6b6b' : '#ffaa00';
+      cartpoleCtx.lineWidth = 6;
+      cartpoleCtx.lineCap = 'round';
+      cartpoleCtx.beginPath();
+      cartpoleCtx.moveTo(cartX, cartY - 25);
+      cartpoleCtx.lineTo(poleEndX, poleEndY);
+      cartpoleCtx.stroke();
+
+      // Pivot
+      cartpoleCtx.fillStyle = '#fff';
+      cartpoleCtx.beginPath();
+      cartpoleCtx.arc(cartX, cartY - 25, 4, 0, Math.PI * 2);
+      cartpoleCtx.fill();
+    }
+
+    async function populateCartPoleSnapshots() {
+      const snaps = await loadGymSnapshots('CartPole');
+      const select = document.getElementById('cartpoleSelect');
+      select.innerHTML = '<option value="">-- 選擇訓練結果 --</option>';
+      snaps.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        const rewardStr = s.totalReward.toFixed(0);
+        const stepsStr = s.steps;
+        opt.textContent = `${s.name} (reward: ${rewardStr}, steps: ${stepsStr})`;
+        select.appendChild(opt);
+      });
+    }
+
+    document.getElementById('cartpoleSelect').onchange = async (e) => {
+      if (!e.target.value) {
+        cartpoleReplay?.stop();
+        cartpoleReplay = null;
+        cartpoleCtx.fillStyle = '#0f0f1a';
+        cartpoleCtx.fillRect(0, 0, cartpoleCanvas.width, cartpoleCanvas.height);
+        document.getElementById('cartpoleInfo').textContent = '等待選擇訓練結果...';
+        document.getElementById('cartpoleInfo').className = 'info';
+        return;
+      }
+
+      const data = await loadGymSnapshot(e.target.value);
+      document.getElementById('cartpoleInfo').textContent = '已載入，等待播放...';
+      document.getElementById('cartpoleInfo').className = 'info';
+
+      cartpoleReplay = new GymReplay({
+        episodeRecord: data.episodeRecord,
+        onStep: (step, obs) => {
+          drawCartPole(obs);
+          const totalReward = data.episodeRecord.rewards.slice(0, step + 1).reduce((a, b) => a + b, 0);
+          document.getElementById('cartpoleInfo').textContent =
+            `Step: ${step + 1}/${data.episodeRecord.observations.length} | Reward: ${totalReward.toFixed(1)}`;
+        },
+        onDone: (totalReward, success) => {
+          document.getElementById('cartpoleInfo').textContent +=
+            `\n完成! 總 reward: ${totalReward.toFixed(1)} ${success ? '✓ 成功' : '✗ 失敗'}`;
+          document.getElementById('cartpoleInfo').className = success ? 'info' : 'info error';
+        },
+      });
+    };
+
+    document.getElementById('cartpolePlay').onclick = () => {
+      if (cartpoleReplay) cartpoleReplay.play();
+    };
+    document.getElementById('cartpolePause').onclick = () => {
+      if (cartpoleReplay) cartpoleReplay.pause();
+    };
+    document.getElementById('cartpoleStop').onclick = () => {
+      if (cartpoleReplay) cartpoleReplay.stop();
+    };
+    document.getElementById('cartpoleSpeed').onchange = (e) => {
+      if (cartpoleReplay) cartpoleReplay.setSpeed(parseInt(e.target.value) || 50);
+    };
+
+    // ============ FrozenLake Renderer ============
+
+    const frozenLakeCanvas = document.getElementById('frozenLakeCanvas');
+    const flCtx = frozenLakeCanvas.getContext('2d');
+    let frozenLakeReplay = null;
+
+    const GRID_SIZE = 4;
+    const CELL_SIZE = 80;
+    const PADDING = 40;
+
+    function drawFrozenLakeGrid() {
+      flCtx.fillStyle = '#0f0f1a';
+      flCtx.fillRect(0, 0, frozenLakeCanvas.width, frozenLakeCanvas.height);
+
+      // S = start, F = frozen, H = hole, G = goal
+      // Layout (standard 4x4):
+      // S F F F
+      // F H H F
+      // F F F H
+      // H F F G
+      const layout = [
+        ['S', 'F', 'F', 'F'],
+        ['F', 'H', 'H', 'F'],
+        ['F', 'F', 'F', 'H'],
+        ['H', 'F', 'F', 'G'],
+      ];
+
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const x = PADDING + c * CELL_SIZE;
+          const y = PADDING + r * CELL_SIZE;
+          const cell = layout[r][c];
+
+          // Cell background
+          if (cell === 'H') {
+            flCtx.fillStyle = '#1a1a2e';
+          } else if (cell === 'G') {
+            flCtx.fillStyle = '#00d4ff22';
+          } else {
+            flCtx.fillStyle = '#2a2a4a';
+          }
+          flCtx.fillRect(x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+
+          // Grid lines
+          flCtx.strokeStyle = '#444';
+          flCtx.lineWidth = 1;
+          flCtx.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
+
+          // Cell content
+          if (cell === 'H') {
+            // Hole - dark circle
+            flCtx.fillStyle = '#0a0a15';
+            flCtx.beginPath();
+            flCtx.arc(x + CELL_SIZE / 2, y + CELL_SIZE / 2, CELL_SIZE / 3, 0, Math.PI * 2);
+            flCtx.fill();
+          } else if (cell === 'G') {
+            // Goal - flag
+            flCtx.fillStyle = '#00d4ff';
+            flCtx.font = 'bold 24px sans-serif';
+            flCtx.textAlign = 'center';
+            flCtx.textBaseline = 'middle';
+            flCtx.fillText('★', x + CELL_SIZE / 2, y + CELL_SIZE / 2);
+          } else if (cell === 'S') {
+            // Start marker
+            flCtx.fillStyle = '#7fdb7f';
+            flCtx.font = '16px sans-serif';
+            flCtx.textAlign = 'center';
+            flCtx.textBaseline = 'middle';
+            flCtx.fillText('START', x + CELL_SIZE / 2, y + CELL_SIZE / 2);
+          }
+        }
+      }
+    }
+
+    function drawFrozenLakeAgent(pos) {
+      drawFrozenLakeGrid();
+      const x = PADDING + (pos % GRID_SIZE) * CELL_SIZE + CELL_SIZE / 2;
+      const y = PADDING + Math.floor(pos / GRID_SIZE) * CELL_SIZE + CELL_SIZE / 2;
+
+      // Agent
+      flCtx.fillStyle = '#ff6b6b';
+      flCtx.beginPath();
+      flCtx.arc(x, y, CELL_SIZE / 4, 0, Math.PI * 2);
+      flCtx.fill();
+
+      // Glow effect
+      const gradient = flCtx.createRadialGradient(x, y, 0, x, y, CELL_SIZE / 2);
+      gradient.addColorStop(0, '#ff6b6b44');
+      gradient.addColorStop(1, 'transparent');
+      flCtx.fillStyle = gradient;
+      flCtx.beginPath();
+      flCtx.arc(x, y, CELL_SIZE / 2, 0, Math.PI * 2);
+      flCtx.fill();
+    }
+
+    async function populateFrozenLakeSnapshots() {
+      const snaps = await loadGymSnapshots('FrozenLake');
+      const select = document.getElementById('frozenLakeSelect');
+      select.innerHTML = '<option value="">-- 選擇訓練結果 --</option>';
+      snaps.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        const rewardStr = s.totalReward.toFixed(1);
+        const stepsStr = s.steps;
+        const status = s.success ? '✓' : '✗';
+        opt.textContent = `${s.name} (reward: ${rewardStr}, steps: ${stepsStr}) ${status}`;
+        select.appendChild(opt);
+      });
+    }
+
+    document.getElementById('frozenLakeSelect').onchange = async (e) => {
+      if (!e.target.value) {
+        frozenLakeReplay?.stop();
+        frozenLakeReplay = null;
+        drawFrozenLakeGrid();
+        document.getElementById('frozenLakeInfo').textContent = '等待選擇訓練結果...';
+        document.getElementById('frozenLakeInfo').className = 'info';
+        return;
+      }
+
+      const data = await loadGymSnapshot(e.target.value);
+      document.getElementById('frozenLakeInfo').textContent = '已載入，等待播放...';
+      document.getElementById('frozenLakeInfo').className = 'info';
+
+      frozenLakeReplay = new GymReplay({
+        episodeRecord: data.episodeRecord,
+        onStep: (step, obs) => {
+          const pos = Math.round(obs[0]);
+          drawFrozenLakeAgent(pos);
+          const totalReward = data.episodeRecord.rewards.slice(0, step + 1).reduce((a, b) => a + b, 0);
+          document.getElementById('frozenLakeInfo').textContent =
+            `Step: ${step + 1}/${data.episodeRecord.observations.length} | Reward: ${totalReward.toFixed(1)}`;
+        },
+        onDone: (totalReward, success) => {
+          document.getElementById('frozenLakeInfo').textContent +=
+            `\n完成! 總 reward: ${totalReward.toFixed(1)} ${success ? '✓ 成功' : '✗ 失敗'}`;
+          document.getElementById('frozenLakeInfo').className = success ? 'info' : 'info error';
+        },
+      });
+    };
+
+    document.getElementById('frozenLakePlay').onclick = () => {
+      if (frozenLakeReplay) frozenLakeReplay.play();
+    };
+    document.getElementById('frozenLakePause').onclick = () => {
+      if (frozenLakeReplay) frozenLakeReplay.pause();
+    };
+    document.getElementById('frozenLakeStop').onclick = () => {
+      if (frozenLakeReplay) frozenLakeReplay.stop();
+    };
+    document.getElementById('frozenLakeSpeed').onchange = (e) => {
+      if (frozenLakeReplay) frozenLakeReplay.setSpeed(parseInt(e.target.value) || 50);
+    };
+
+    // Initialize
+    populateCartPoleSnapshots();
+    populateFrozenLakeSnapshots();
+
+    // Draw initial grid
+    drawFrozenLakeGrid();
+    cartpoleCtx.fillStyle = '#0f0f1a';
+    cartpoleCtx.fillRect(0, 0, cartpoleCanvas.width, cartpoleCanvas.height);
+  </script>
+</body>
+</html>

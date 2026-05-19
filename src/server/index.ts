@@ -58,6 +58,31 @@ const server = createServer(async (req, res) => {
       } else {
         sendJSON(res, 405, { error: 'Method not allowed' });
       }
+    } else if (pathname === '/api/gym') {
+      if (req.method === 'GET') {
+        const env = url.searchParams.get('env') || undefined;
+        const snapshots = await storage.listGym(env);
+        sendJSON(res, 200, { snapshots });
+      } else if (req.method === 'POST') {
+        const body = await parseBody(req);
+        const reqData = JSON.parse(body);
+        const id = await storage.saveGym(reqData);
+        sendJSON(res, 200, { id, success: true });
+      } else {
+        sendJSON(res, 405, { error: 'Method not allowed' });
+      }
+    } else if (pathname.startsWith('/api/gym/')) {
+      const id = pathname.split('/')[3];
+      if (req.method === 'GET') {
+        const result = await storage.loadGym(id);
+        if (!result) { sendJSON(res, 404, { error: 'Not found' }); return; }
+        sendJSON(res, 200, { metadata: result.metadata, episodeRecord: result.episodeRecord });
+      } else if (req.method === 'DELETE') {
+        await storage.deleteGym(id);
+        sendJSON(res, 200, { success: true });
+      } else {
+        sendJSON(res, 405, { error: 'Method not allowed' });
+      }
     } else {
       sendJSON(res, 404, { error: 'Not found' });
     }
