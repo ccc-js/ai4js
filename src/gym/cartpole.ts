@@ -48,18 +48,13 @@ export class CartPole implements Env {
     this.action_space = new Discrete(2);
   }
 
-  reset(): StepResult {
+  reset(): number[] {
     this.x = (Math.random() - 0.5) * 0.1;
     this.x_dot = (Math.random() - 0.5) * 0.1;
     this.theta = (Math.random() - 0.5) * 0.1;
     this.theta_dot = (Math.random() - 0.5) * 0.1;
     this.steps = 0;
-    return {
-      observation: this.getObservation(),
-      reward: 0,
-      done: false,
-      info: {}
-    };
+    return this.getObservation();
   }
 
   step(action: number | number[]): StepResult {

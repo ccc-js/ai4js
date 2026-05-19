@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ai4js - Neural Network Demos</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    h1 { font-size: 2.5rem; color: #00d4ff; margin-bottom: 0.5rem; }
+    .subtitle { color: #888; margin-bottom: 2rem; font-size: 1.1rem; }
+    .demo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; }
+    .demo-card { background: #1a1a2e; border-radius: 12px; padding: 1.5rem; border: 1px solid #2a2a4a; }
+    .demo-card h2 { color: #00d4ff; margin-bottom: 1rem; font-size: 1.3rem; }
+    .demo-card p { color: #aaa; margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.5; }
+    button { background: #00d4ff; color: #0f0f1a; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+    button:hover { background: #00b8e6; transform: translateY(-1px); }
+    button:disabled { background: #444; cursor: not-allowed; transform: none; }
+    .output { background: #0f0f1a; padding: 1rem; border-radius: 6px; margin-top: 1rem; font-family: 'Fira Code', monospace; font-size: 0.85rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; color: #7fdb7f; }
+    .output.error { color: #ff6b6b; }
+    .progress { margin-top: 0.5rem; height: 4px; background: #2a2a4a; border-radius: 2px; overflow: hidden; }
+    .progress-bar { height: 100%; background: #00d4ff; transition: width 0.3s; width: 0%; }
+    canvas { background: #0f0f1a; border-radius: 6px; margin-top: 1rem; }
+    input, select { width: 100%; padding: 0.5rem; background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 4px; color: #e0e0e0; margin-bottom: 0.5rem; }
+    .row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .row input, .row select { flex: 1; margin-bottom: 0; }
+    footer { text-align: center; padding: 2rem; color: #666; font-size: 0.85rem; margin-top: 2rem; border-top: 1px solid #2a2a4a; }
+    a { color: #00d4ff; }
+    .status { font-size: 0.8rem; color: #888; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ai4js</h1>
+    <p class="subtitle">Neural Network Framework for JavaScript - Training Demos</p>
+
+    <div class="demo-grid">
+      <div class="demo-card">
+        <h2>Linear Regression</h2>
+        <p>學習 y = 2x + 1 的關係。模型：單一線性層 + MSE 損失。</p>
+        <div class="row">
+          <input type="text" id="linearName" placeholder="Snapshot name" value="linear-test">
+          <select id="linearSnapshots"><option value="">-- New --</option></select>
+        </div>
+        <button id="runLinear">Train / Continue</button>
+        <div class="progress"><div class="progress-bar" id="linearProgress"></div></div>
+        <canvas id="linearCanvas" width="300" height="200"></canvas>
+        <div class="output" id="linearOutput">Click "Train / Continue" to start...</div>
+        <div class="status" id="linearStatus"></div>
+      </div>
+
+      <div class="demo-card">
+        <h2>CharGPT - 中文句子生成</h2>
+        <p>訓練 Character-level GPT 生成中文句子。從快照繼續訓練可中斷後恢復。</p>
+        <div class="row">
+          <input type="text" id="gptName" placeholder="Snapshot name" value="gpt-test">
+          <input type="number" id="gptSteps" value="1000" min="100" max="100000" style="width:80px">
+          <select id="gptSnapshots"><option value="">-- New --</option></select>
+        </div>
+        <button id="runGpt">Train / Continue</button>
+        <div class="progress"><div class="progress-bar" id="gptProgress"></div></div>
+        <div class="output" id="gptOutput">Click "Train / Continue" to start...</div>
+        <div class="status" id="gptStatus"></div>
+      </div>
+    </div>
+
+    <footer>
+      <p>Built with <a href="https://github.com/cccnqu/ai4js">ai4js</a> - JavaScript AI/ML Framework</p>
+    </footer>
+  </div>
+
+  <script type="module">
+    import { Tensor, Linear, Module, Adam, setSeed, GPT, train_model, generate_samples } from '../../src/nn/index.js';
+import ndarray from 'ndarray';
+
+    const API_BASE = 'http://localhost:3001';
+
+    async function saveSnapshot(name, type, steps, loss, data) {
+      const res = await fetch(`${API_BASE}/api/snapshots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, type, steps, loss, data }),
+      });
+      return res.json();
+    }
+
+    async function listSnapshots() {
+      try {
+        const res = await fetch(`${API_BASE}/api/snapshots`);
+        const data = await res.json();
+        return data.snapshots || [];
+      } catch { return []; }
+    }
+
+    async function loadSnapshot(id) {
+      const res = await fetch(`${API_BASE}/api/snapshots/${id}`);
+      const data = await res.json();
+      return data.data;
+    }
+
+    async function loadSnapshotsList() {
+      const snaps = await listSnapshots();
+      const linearSelect = document.getElementById('linearSnapshots');
+      const gptSelect = document.getElementById('gptSnapshots');
+      linearSelect.innerHTML = '<option value="">-- New --</option>';
+      gptSelect.innerHTML = '<option value="">-- New --</option>';
+      snaps.forEach(s => {
+        const opt = `<option value="${s.id}">${s.name} (step ${s.steps})</option>`;
+        if (s.type === 'linear') linearSelect.innerHTML += opt;
+        else if (s.type === 'gpt') gptSelect.innerHTML += opt;
+      });
+    }
+
+    loadSnapshotsList();
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // ============ Linear Regression ============
+
+    class LinearRegModel extends Module {
+      constructor() {
+        super();
+        this.linear = new Linear(1, 1, true);
+      }
+      __call__(x) { return this.linear.__call__(x); }
+    }
+
+    function drawLinearPlot(xData, yData, w, b) {
+      const canvas = document.getElementById('linearCanvas');
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0f0f1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const p = 30, pw = canvas.width - p * 2, ph = canvas.height - p * 2;
+      const xMin = -1, xMax = 5, yMin = -3, yMax = 13;
+      const toX = x => p + ((x - xMin) / (xMax - xMin)) * pw;
+      const toY = y => p + ((yMax - y) / (yMax - yMin)) * ph;
+      ctx.strokeStyle = '#2a2a4a'; ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i++) {
+        ctx.beginPath(); ctx.moveTo(toX(i), p); ctx.lineTo(toX(i), canvas.height - p); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(p, toY(i * 2)); ctx.lineTo(canvas.width - p, toY(i * 2)); ctx.stroke();
+      }
+      ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(toX(xMin), toY(w * xMin + b));
+      ctx.lineTo(toX(xMax), toY(w * xMax + b));
+      ctx.stroke();
+      ctx.fillStyle = '#00d4ff';
+      for (let i = 0; i < xData.length; i++) {
+        ctx.beginPath(); ctx.arc(toX(xData[i]), toY(yData[i]), 5, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = '#888'; ctx.font = '12px sans-serif';
+      ctx.fillText('x', canvas.width - 15, canvas.height - 35);
+      ctx.fillText('y', 10, p - 10);
+    }
+
+    let gXData = [], gYData = [];
+
+    async function runLinear() {
+      const name = document.getElementById('linearName').value || 'linear-test';
+      const output = document.getElementById('linearOutput');
+      const progress = document.getElementById('linearProgress');
+      const status = document.getElementById('linearStatus');
+
+      output.textContent = 'Initializing...';
+      output.classList.remove('error');
+
+      setSeed(42);
+      const model = new LinearRegModel();
+      const optimizer = new Adam(model.parameters(), 0.1);
+
+      gXData = []; gYData = [];
+      for (let i = 0; i < 30; i++) {
+        const x = Math.random() * 5;
+        gXData.push(x); gYData.push(2 * x + 1 + (Math.random() - 0.5) * 2);
+      }
+      drawLinearPlot(gXData, gYData, 0, 0);
+
+      const totalSteps = 50;
+      for (let step = 0; step < totalSteps; step++) {
+        for (let i = 0; i < 30; i++) {
+          optimizer.zero_grad();
+          const pred = model.__call__(new Tensor([[gXData[i]]], [], true));
+          const target = new Tensor([[gYData[i]]], [], false);
+          const loss = pred.add(target.mul(-1)).mul(pred.add(target.mul(-1)));
+          loss.backward();
+          optimizer.step();
+        }
+
+        const w = model.linear.weight.data.data[0];
+        const b = model.linear.bias.data.data[0];
+        progress.style.width = `${(step / totalSteps) * 100}%`;
+
+        if (step % 10 === 0) {
+          output.textContent = `Step ${step}/${totalSteps}\ny = ${w.toFixed(3)}x + ${b.toFixed(3)}\n(True: y = 2x + 1)`;
+          drawLinearPlot(gXData, gYData, w, b);
+          await sleep(20);
+        }
+
+        if (step > 0 && step % 20 === 0) {
+          try {
+            const config = { in_features: 1, out_features: 1, bias: true };
+            const { trainingToJSON } = await import('../../src/nn/io.js');
+            const data = trainingToJSON(model, optimizer, config, { name, steps: step });
+            await saveSnapshot(name, 'linear', step, undefined, data);
+            status.textContent = `Saved snapshot at step ${step}`;
+          } catch (e) { status.textContent = 'Snapshot save failed (server offline?)'; }
+        }
+      }
+
+      const w = model.linear.weight.data.data[0];
+      const b = model.linear.bias.data.data[0];
+      output.textContent = `Training complete!\n\nLearned: y = ${w.toFixed(3)}x + ${b.toFixed(3)}\nTrue: y = 2x + 1`;
+      progress.style.width = '100%';
+      drawLinearPlot(gXData, gYData, w, b);
+      await loadSnapshotsList();
+    }
+
+    document.getElementById('runLinear').onclick = () => {
+      document.getElementById('runLinear').disabled = true;
+      runLinear().then(() => { document.getElementById('runLinear').disabled = false; })
+        .catch(e => {
+          output.textContent = 'Error: ' + e.message; output.classList.add('error');
+          document.getElementById('runLinear').disabled = false;
+        });
+    };
+
+    // ============ CharGPT ============
+
+    const DEFAULT_DOCS = [
+      '小貓坐在桌上', '小狗跑在路上', '小鳥飛在天上', '小魚游在水中',
+      '大貓坐在地上', '大狗跑在地上', '大鳥飛在山上', '小貓吃了魚',
+      '小狗吃了肉', '小鳥吃了蟲', '小魚吃了草', '大貓吃了魚',
+      '大狗吃了肉', '大鳥吃了蟲', '我看到一隻小貓', '我看到一隻小狗',
+      '我看到一隻小鳥', '我看到一隻小魚', '你看到一隻大貓', '你看到一隻大狗',
+      '你看到一隻大鳥', '他看到一隻大魚', '我喜歡小貓', '我喜歡小狗',
+      '我喜歡小鳥', '你喜歡大貓', '你喜歡大狗', '他喜歡小魚',
+      '她喜歡大鳥', '天上有白雲', '天上有太陽', '天上有月亮',
+      '天上有星星', '山上有大樹', '山上有小花', '山上有小草',
+      '水中有小魚', '水中有大魚', '地上有小貓', '地上有大狗',
+      '今天天氣好', '今天太陽大', '今天風很大', '今天雨很大',
+      '小貓很可愛', '小狗很可愛', '小鳥很可愛', '大貓很漂亮',
+      '大狗很漂亮', '大鳥很漂亮', '我去學校上課', '你去學校上課',
+      '他去學校上課', '她去學校上課', '我在家裡吃飯', '你在家裡吃飯',
+      '他在家裡看書', '她在家裡看書', '我和你是好朋友', '你和他是好朋友',
+      '他和她是好朋友', '我們都是好朋友', '早上太陽出來了', '中午太陽很大',
+      '下午風很大', '晚上月亮出來了', '晚上星星很多', '小花很漂亮',
+      '小草很多', '大樹很高', '白雲很白', '太陽很大',
+      '月亮很亮', '星星很小', '我愛吃飯', '你愛看書',
+      '他愛跑步', '她愛唱歌', '我會寫字', '你會看書',
+      '他會跑步', '她會唱歌', '我想吃魚', '你想吃肉',
+      '他想看書', '她想唱歌', '一隻小貓在桌上', '一隻小狗在地上',
+      '一隻小鳥在天上', '一隻小魚在水中', '兩隻小貓在地上', '兩隻小狗在路上',
+      '三隻小鳥在天上', '很多小魚在水中', '春天小花很多', '夏天太陽很大',
+      '秋天風很大', '冬天雨很大', '春天很美', '夏天很熱',
+      '秋天很涼', '冬天很冷', '我在春天看花', '你在夏天游水',
+      '他在秋天看書', '她在冬天唱歌', '小貓和小狗是好朋友', '小鳥和小魚是好朋友',
+      '大貓和大狗是好朋友', '我和小貓是好朋友', '你和小狗是好朋友', '他喜歡在山上跑步',
+      '她喜歡在水中游水', '我喜歡在家裡看書', '你喜歡在學校上課', '天上的白雲很漂亮',
+      '山上的大樹很高', '水中的小魚很可愛', '地上的小花很美', '早上我去學校上課',
+      '中午我在學校吃飯', '下午我在家裡看書', '晚上我在家裡吃飯', '早上你去學校上課',
+      '中午你在學校吃飯', '下午你在家裡看書', '晚上你在家裡吃飯', '小貓在家裡',
+      '小狗在路上', '小鳥在山上', '小魚在水中', '大樹在山上',
+      '小花在地上', '太陽在天上', '月亮在天上', '星星在天上',
+      '白雲在天上', '我很開心', '你很開心', '他很開心',
+      '她很開心', '我們很開心', '大家都很開心', '今天很開心',
+      '我今天很開心', '你今天很開心', '他今天很開心'
+    ];
+
+    async function runGPT() {
+      const name = document.getElementById('gptName').value || 'gpt-test';
+      const steps = parseInt(document.getElementById('gptSteps').value) || 1000;
+      const output = document.getElementById('gptOutput');
+      const progress = document.getElementById('gptProgress');
+      const status = document.getElementById('gptStatus');
+
+      output.textContent = 'Initializing CharGPT...';
+      output.classList.remove('error');
+
+      setSeed(42);
+
+      const uchars = [...new Set(DEFAULT_DOCS.join(''))].sort();
+      const BOS = uchars.length;
+      const vocab_size = uchars.length + 1;
+      const block_size = 16;
+
+      const model = new GPT(vocab_size, block_size, 1, 16, 4);
+      const optimizer = new Adam(model.parameters(), 0.01);
+
+      const params = model.parameters();
+      const charToIdx = {};
+      for (let i = 0; i < uchars.length; i++) charToIdx[uchars[i]] = i;
+
+      let lastSaveStep = 0;
+
+      for (let step = 0; step < steps; step++) {
+        const doc = DEFAULT_DOCS[step % DEFAULT_DOCS.length];
+        if (!doc || doc.length === 0) continue;
+
+        const tokens = [BOS];
+        for (const ch of doc) {
+          if (charToIdx[ch] !== undefined) tokens.push(charToIdx[ch]);
+        }
+        tokens.push(BOS);
+
+        const n = Math.min(block_size, tokens.length - 1);
+        if (n <= 0) continue;
+
+        const xData = tokens.slice(0, n);
+        const yData = tokens.slice(1, n + 1);
+        const x = new Tensor(ndarray(new Float32Array(xData), [1, n]), [], true);
+        const y = new Tensor(ndarray(new Float32Array(yData), [1, n]), [], false);
+
+        optimizer.zero_grad();
+        const [logits, _] = model.__call__(x, null);
+        const loss = logits.cross_entropy(y);
+        loss.backward();
+
+        const max_norm = 1.0;
+        let total_norm = 0;
+        for (const p of params) {
+          let sum = 0;
+          for (let i = 0; i < p.grad.data.length; i++) sum += p.grad.data[i] * p.grad.data[i];
+          total_norm += sum;
+        }
+        total_norm = Math.sqrt(total_norm);
+
+        if (total_norm > max_norm) {
+          const clip_coef = max_norm / (total_norm + 1e-6);
+          for (const p of params) {
+            for (let i = 0; i < p.grad.data.length; i++) p.grad.data[i] *= clip_coef;
+          }
+        }
+
+        optimizer.step();
+        optimizer.lr = 0.01 * (1 - step / steps);
+
+        if (step % 10 === 0 || step === steps - 1) {
+          const lossVal = loss.data.data[0];
+          output.textContent = `Step ${step}/${steps} | loss ${lossVal.toFixed(4)}`;
+          progress.style.width = `${(step / steps) * 100}%`;
+          if (step % 50 === 0) await sleep(10);
+        }
+
+        if (step > 0 && step % 200 === 0 && step !== lastSaveStep) {
+          try {
+            const config = { vocab_size, block_size, n_layer: 1, n_embd: 16, n_head: 4 };
+            const { trainingToJSON } = await import('../../src/nn/io.js');
+            const data = trainingToJSON(model, optimizer, config, { name, steps: step });
+            await saveSnapshot(name, 'gpt', step, undefined, data);
+            status.textContent = `Saved snapshot at step ${step}`;
+            lastSaveStep = step;
+          } catch (e) { status.textContent = 'Snapshot save failed (server offline?)'; }
+        }
+      }
+
+      output.textContent += '\n--- inference ---\n';
+      for (let i = 0; i < 5; i++) {
+        let current_token = BOS;
+        const sample = [];
+        let kv_caches = null;
+
+        for (let pos_id = 0; pos_id < block_size; pos_id++) {
+          const x = new Tensor(ndarray(new Float32Array([current_token]), [1, 1]), [], false);
+          const [logits, kv_caches_new] = model.__call__(x, kv_caches);
+          kv_caches = kv_caches_new;
+
+          const last_logits = logits.data.data;
+          const maxLogit = Math.max(...last_logits);
+          let sumExp = 0;
+          const exps = new Float32Array(vocab_size);
+          for (let v = 0; v < vocab_size; v++) {
+            exps[v] = Math.exp(last_logits[v] / 0.5 - maxLogit / 0.5);
+            sumExp += exps[v];
+          }
+          const probs = Array.from(exps).map(e => e / sumExp);
+          let r = Math.random();
+          let next_token = 0;
+          let cumsum = 0;
+          for (let v = 0; v < vocab_size; v++) {
+            cumsum += probs[v];
+            if (r <= cumsum) { next_token = v; break; }
+          }
+          if (next_token === BOS) break;
+          sample.push(uchars[next_token]);
+          current_token = next_token;
+        }
+        output.textContent += sample.join('') + '\n';
+      }
+
+      progress.style.width = '100%';
+      await loadSnapshotsList();
+    }
+
+    document.getElementById('runGpt').onclick = () => {
+      document.getElementById('runGpt').disabled = true;
+      runGPT().then(() => { document.getElementById('runGpt').disabled = false; })
+        .catch(e => {
+          output.textContent = 'Error: ' + e.message; output.classList.add('error');
+          document.getElementById('runGpt').disabled = false;
+        });
+    };
+  </script>
+</body>
+</html>

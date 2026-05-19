@@ -52,15 +52,10 @@ export class FrozenLake implements Env {
     this.action_space = new Discrete(4);
   }
 
-  reset(): StepResult {
+  reset(): number[] {
     this.state = 0;
     this.steps = 0;
-    return {
-      observation: [this.state],
-      reward: 0,
-      done: false,
-      info: {}
-    };
+    return [this.state];
   }
 
   step(action: number | number[]): StepResult {
