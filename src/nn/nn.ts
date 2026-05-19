@@ -194,6 +194,7 @@ export class RMSNorm extends Module {
 export class Adam {
   params: Tensor[];
   lr: number;
+  initial_lr: number;
   beta1: number;
   beta2: number;
   eps: number;
@@ -204,6 +205,7 @@ export class Adam {
   constructor(params: Tensor[], lr = 0.01, betas: [number, number] = [0.85, 0.99], eps = 1e-8) {
     this.params = params;
     this.lr = lr;
+    this.initial_lr = lr;
     this.beta1 = betas[0];
     this.beta2 = betas[1];
     this.eps = eps;

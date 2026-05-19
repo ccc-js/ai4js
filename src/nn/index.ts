@@ -5,6 +5,8 @@ export { train_model, generate_samples } from './chargpt.js';
 export {
   ModelSnapshot,
   WeightEntry,
+  AdamSnapshot,
+  TrainingSnapshot,
   serializeModel,
   deserializeModel,
   modelToJSON,
@@ -14,4 +16,13 @@ export {
   saveModelToStorage,
   loadModelFromStorage,
   deleteModelFromStorage,
+  serializeAdam,
+  deserializeAdam,
+  loadAdam,
+  serializeTraining,
+  deserializeTraining,
+  trainingToJSON,
+  trainingFromJSON,
+  saveTrainingToFile,
+  loadTrainingFromFile,
 } from './io.js';

@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { GPT } from './gpt.js';
-import { Module } from './nn.js';
+import { Module, Adam } from './nn.js';
 import { Tensor } from './tensor.js';
 import ndarray from 'ndarray';
 
@@ -17,6 +17,24 @@ export interface WeightEntry {
   path: string;
   shape: number[];
   data: number[];
+}
+
+export interface AdamSnapshot {
+  lr: number;
+  initial_lr: number;
+  beta1: number;
+  beta2: number;
+  eps: number;
+  t: number;
+  m: number[][];
+  v: number[][];
+}
+
+export interface TrainingSnapshot {
+  version: string;
+  model: ModelSnapshot;
+  optimizer: AdamSnapshot;
+  metadata: Record<string, unknown>;
 }
 
 function getWeightsWithPath(
@@ -210,4 +228,146 @@ export function deleteModelFromStorage(key: string): boolean {
     return true;
   }
   return false;
+}
+
+export function serializeAdam(optimizer: Adam): AdamSnapshot {
+  return {
+    lr: optimizer.lr,
+    initial_lr: (optimizer as { initial_lr: number }).initial_lr,
+    beta1: optimizer.beta1,
+    beta2: optimizer.beta2,
+    eps: optimizer.eps,
+    t: optimizer.t,
+    m: optimizer.m.map(arr => Array.from(arr)),
+    v: optimizer.v.map(arr => Array.from(arr)),
+  };
+}
+
+export function deserializeAdam(snapshot: AdamSnapshot): {
+  lr: number;
+  initial_lr: number;
+  beta1: number;
+  beta2: number;
+  eps: number;
+  t: number;
+  m: Float32Array[];
+  v: Float32Array[];
+} {
+  return {
+    lr: snapshot.lr,
+    initial_lr: snapshot.initial_lr,
+    beta1: snapshot.beta1,
+    beta2: snapshot.beta2,
+    eps: snapshot.eps,
+    t: snapshot.t,
+    m: snapshot.m.map(arr => new Float32Array(arr)),
+    v: snapshot.v.map(arr => new Float32Array(arr)),
+  };
+}
+
+export function loadAdam(optimizer: Adam, snapshot: AdamSnapshot): void {
+  optimizer.lr = snapshot.lr;
+  optimizer.initial_lr = snapshot.initial_lr;
+  optimizer.beta1 = snapshot.beta1;
+  optimizer.beta2 = snapshot.beta2;
+  optimizer.eps = snapshot.eps;
+  optimizer.t = snapshot.t;
+
+  for (let i = 0; i < optimizer.m.length; i++) {
+    optimizer.m[i] = new Float32Array(snapshot.m[i]);
+    optimizer.v[i] = new Float32Array(snapshot.v[i]);
+  }
+}
+
+export function serializeTraining(
+  model: Module,
+  optimizer: Adam,
+  config: Record<string, unknown>,
+  metadata: Record<string, unknown> = {}
+): TrainingSnapshot {
+  return {
+    version: '1.0.0',
+    model: serializeModel(model, config, metadata),
+    optimizer: serializeAdam(optimizer),
+    metadata: {
+      ...metadata,
+      created: Date.now(),
+    },
+  };
+}
+
+export function deserializeTraining(snapshot: TrainingSnapshot): {
+  model: Module;
+  optimizer: {
+    lr: number;
+    initial_lr: number;
+    beta1: number;
+    beta2: number;
+    eps: number;
+    t: number;
+    m: Float32Array[];
+    v: Float32Array[];
+  };
+} {
+  const model = deserializeModel(snapshot.model);
+  const optimizer = deserializeAdam(snapshot.optimizer);
+  return { model, optimizer };
+}
+
+export function trainingToJSON(
+  model: Module,
+  optimizer: Adam,
+  config: Record<string, unknown>,
+  metadata: Record<string, unknown> = {}
+): string {
+  return JSON.stringify(serializeTraining(model, optimizer, config, metadata), null, 2);
+}
+
+export function trainingFromJSON(json: string): {
+  model: Module;
+  optimizer: {
+    lr: number;
+    initial_lr: number;
+    beta1: number;
+    beta2: number;
+    eps: number;
+    t: number;
+    m: Float32Array[];
+    v: Float32Array[];
+  };
+} {
+  const snapshot = JSON.parse(json) as TrainingSnapshot;
+  return deserializeTraining(snapshot);
+}
+
+export async function saveTrainingToFile(
+  model: Module,
+  optimizer: Adam,
+  filepath: string,
+  config: Record<string, unknown>,
+  metadata: Record<string, unknown> = {}
+): Promise<void> {
+  const json = trainingToJSON(model, optimizer, config, metadata);
+  const dir = path.dirname(filepath);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(filepath, json, 'utf-8');
+}
+
+export async function loadTrainingFromFile(
+  filepath: string
+): Promise<{
+  model: Module;
+  optimizer: {
+    lr: number;
+    initial_lr: number;
+    beta1: number;
+    beta2: number;
+    eps: number;
+    t: number;
+    m: Float32Array[];
+    v: Float32Array[];
+  };
+}> {
+  const json = await fs.readFile(filepath, 'utf-8');
+  return trainingFromJSON(json);
 }

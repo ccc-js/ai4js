@@ -1,7 +1,7 @@
 import { train_model, generate_samples } from './chargpt.js';
 import { GPT } from './gpt.js';
 import { Adam, setSeed } from './nn.js';
-import { saveModelToFile, loadModelFromFile } from './io.js';
+import { saveTrainingToFile, loadTrainingFromFile, loadAdam } from './io.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -35,23 +35,41 @@ async function main() {
   const n_head = 4;
 
   let model: GPT;
+  let optimizer: Adam;
+  let adamState: { lr: number; beta1: number; beta2: number; eps: number; t: number; m: Float32Array[]; v: Float32Array[] } | null = null;
+
   if (fs.existsSync(MODEL_PATH)) {
-    console.log('Loading existing model...');
-    model = await loadModelFromFile<GPT>(MODEL_PATH);
-    console.log('Model loaded');
+    console.log('Loading existing model and optimizer...');
+    const loaded = await loadTrainingFromFile(MODEL_PATH);
+    model = loaded.model as GPT;
+    adamState = loaded.optimizer;
+    console.log(`Adam state loaded: t=${adamState.t}`);
   } else {
     console.log('Creating new model...');
     model = new GPT(vocab_size, block_size, n_layer, n_embd, n_head);
   }
+
   console.log(`num params: ${model.parameters().length}`);
 
-  const optimizer = new Adam(model.parameters(), 0.01);
+  optimizer = new Adam(model.parameters(), 0.01);
+  if (adamState) {
+    loadAdam(optimizer, {
+      lr: adamState.lr,
+      beta1: adamState.beta1,
+      beta2: adamState.beta2,
+      eps: adamState.eps,
+      t: adamState.t,
+      m: adamState.m.map(arr => Array.from(arr)),
+      v: adamState.v.map(arr => Array.from(arr)),
+    });
+    console.log(`Optimizer restored: lr=${optimizer.lr}, t=${optimizer.t}`);
+  }
 
   console.log('\n--- training ---');
   train_model(model, optimizer, docs, uchars, BOS, block_size, 100);
 
   console.log('\n--- saving ---');
-  await saveModelToFile(model, MODEL_PATH, {
+  await saveTrainingToFile(model, optimizer, MODEL_PATH, {
     vocab_size,
     block_size,
     n_layer,
@@ -62,7 +80,7 @@ async function main() {
     BOS,
     description: `Trained on ${docs.length} names`,
   });
-  console.log(`Model saved to ${MODEL_PATH}`);
+  console.log(`Saved to ${MODEL_PATH}`);
 
   generate_samples(model, uchars, BOS, vocab_size, block_size, 5, 0.5);
 
