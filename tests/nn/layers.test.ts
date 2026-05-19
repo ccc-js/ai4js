@@ -1,5 +1,5 @@
-import { Tensor } from '../src/nn/tensor.js';
-import { Module, Linear, Embedding } from '../src/nn/nn.js';
+import { Tensor } from '../../src/nn/tensor.js';
+import { Module, Linear, Embedding } from '../../src/nn/nn.js';
 
 describe('v0.4: 網路層', () => {
   describe('Module', () => {

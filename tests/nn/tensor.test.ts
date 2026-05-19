@@ -1,4 +1,4 @@
-import { Tensor } from '../src/nn/tensor.js';
+import { Tensor } from '../../src/nn/tensor.js';
 
 describe('v0.1: 基礎張量類別', () => {
   test('建構子：建立張量並存取 data', () => {

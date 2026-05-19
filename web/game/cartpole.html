@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CartPole - ai4js</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      color: #fff;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 10px; color: #e9ecef; }
+    #gameCanvas {
+      border: 3px solid #495057;
+      border-radius: 8px;
+      background: #1a1a2e;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      padding: 10px 24px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+    }
+    button:hover { transform: translateY(-2px); }
+    button:active { transform: translateY(0); }
+    .btn-primary { background: #4dabf7; color: #1a1a2e; }
+    .btn-success { background: #51cf66; color: #1a1a2e; }
+    .btn-danger { background: #ff6b6b; color: #fff; }
+    .btn-warning { background: #ffd43b; color: #1a1a2e; }
+    .stats {
+      margin-top: 15px;
+      display: flex;
+      gap: 30px;
+      font-size: 1.1rem;
+    }
+    .stat { text-align: center; }
+    .stat-value { font-size: 2rem; font-weight: bold; color: #4dabf7; }
+    .stat-label { font-size: 0.85rem; color: #868e96; }
+    .info-panel {
+      margin-top: 15px;
+      padding: 12px 20px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 0.9rem;
+      display: flex;
+      gap: 25px;
+    }
+    .info-item { display: flex; flex-direction: column; align-items: center; }
+    .info-label { font-size: 0.75rem; color: #6c757d; }
+    .info-value { font-size: 1rem; color: #fff; }
+    .instructions {
+      margin-top: 20px;
+      padding: 15px 25px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #868e96;
+      text-align: center;
+    }
+    kbd {
+      background: #495057;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎯 CartPole</h1>
+  <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+  <div class="info-panel">
+    <div class="info-item"><span class="info-label">x</span><span class="info-value" id="xVal">0.00</span></div>
+    <div class="info-item"><span class="info-label">θ</span><span class="info-value" id="thetaVal">0.00°</span></div>
+    <div class="info-item"><span class="info-label">ẋ</span><span class="info-value" id="xDotVal">0.00</span></div>
+    <div class="info-item"><span class="info-label">θ̇</span><span class="info-value" id="thetaDotVal">0.00</span></div>
+    <div class="info-item"><span class="info-label">Action</span><span class="info-value" id="actionVal">-</span></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-primary" id="resetBtn">Reset (R)</button>
+    <button class="btn-success" id="stepBtn">Step (S)</button>
+    <button class="btn-warning" id="autoBtn">Auto (A)</button>
+    <button class="btn-danger" id="stopBtn">Stop (Space)</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value" id="stepCount">0</div>
+      <div class="stat-label">Steps</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="best">0</div>
+      <div class="stat-label">Best</div>
+    </div>
+  </div>
+
+  <div class="instructions">
+    <kbd>←</kbd> / <kbd>A</kbd> Left | <kbd>→</kbd> / <kbd>D</kbd> Right | <kbd>S</kbd> Auto | <kbd>R</kbd> Reset
+  </div>
+
+  <script type="module">
+    import { createGame, createCartPoleRenderer } from '../../src/game/index.ts';
+    import { CartPole } from '../../src/gym/index.ts';
+
+    const game = createGame({
+      canvas: '#gameCanvas',
+      width: 600,
+      height: 400,
+      backgroundColor: { r: 0.1, g: 0.1, b: 0.18 }
+    });
+
+    const renderer = createCartPoleRenderer({});
+    const env = new CartPole({ max_steps: 500 });
+    renderer.init(game);
+
+    let state = env.reset();
+    let stepCount = 0;
+    let bestSteps = 0;
+    let currentSteps = 0;
+    let autoMode = false;
+    let animationId = null;
+
+    const stepCountEl = document.getElementById('stepCount');
+    const bestEl = document.getElementById('best');
+    const xValEl = document.getElementById('xVal');
+    const thetaValEl = document.getElementById('thetaVal');
+    const xDotValEl = document.getElementById('xDotVal');
+    const thetaDotValEl = document.getElementById('thetaDotVal');
+    const actionValEl = document.getElementById('actionVal');
+
+    function updateUI() {
+      stepCountEl.textContent = stepCount;
+      bestEl.textContent = bestSteps;
+      const [x, x_dot, theta, theta_dot] = state.observation;
+      xValEl.textContent = x.toFixed(2);
+      thetaValEl.textContent = (theta * 180 / Math.PI).toFixed(1) + '°';
+      xDotValEl.textContent = x_dot.toFixed(2);
+      thetaDotValEl.textContent = theta_dot.toFixed(2);
+    }
+
+    function render(action) {
+      renderer.render(state, action);
+      updateUI();
+    }
+
+    function step(action) {
+      state = env.step(action);
+      stepCount++;
+      currentSteps++;
+      actionValEl.textContent = action === 0 ? '← LEFT' : 'RIGHT →';
+
+      if (state.done) {
+        if (currentSteps > bestSteps) bestSteps = currentSteps;
+        updateUI();
+        render();
+        setTimeout(() => reset(), 1500);
+        return;
+      }
+
+      render(action);
+
+      if (autoMode) {
+        animationId = setTimeout(() => step(Math.random() > 0.5 ? 1 : 0), 30);
+      }
+    }
+
+    function reset() {
+      state = env.reset();
+      stepCount = 0;
+      currentSteps = 0;
+      updateUI();
+      render();
+    }
+
+    function toggleAuto() {
+      autoMode = !autoMode;
+      document.getElementById('autoBtn').textContent = autoMode ? 'Pause (A)' : 'Auto (A)';
+      if (autoMode) step(Math.random() > 0.5 ? 1 : 0);
+    }
+
+    document.getElementById('resetBtn').addEventListener('click', reset);
+    document.getElementById('stepBtn').addEventListener('click', () => step(Math.random() > 0.5 ? 1 : 0));
+    document.getElementById('autoBtn').addEventListener('click', toggleAuto);
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      autoMode = false;
+      document.getElementById('autoBtn').textContent = 'Auto (A)';
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      switch(e.key.toLowerCase()) {
+        case 'arrowleft':
+        case 'a': e.preventDefault(); step(0); break;
+        case 'arrowright':
+        case 'd': step(1); break;
+        case 's': e.preventDefault(); toggleAuto(); break;
+        case 'r': reset(); break;
+        case ' ':
+          e.preventDefault();
+          autoMode = false;
+          document.getElementById('autoBtn').textContent = 'Auto (A)';
+          break;
+      }
+    });
+
+    game.start();
+    render();
+  </script>
+</body>
+</html>

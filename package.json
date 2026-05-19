@@ -1,13 +1,15 @@
 {
-  "name": "nn4js",
+  "name": "ai4js",
   "version": "1.0.0",
-  "description": "",
+  "description": "JavaScript/TypeScript AI/ML framework",
   "main": "index.js",
   "scripts": {
     "test": "jest",
+    "test:e2e": "playwright test",
     "lint": "eslint src/**/*.ts tests/**/*.ts",
     "build": "tsc && node esbuild.config.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "server": "vite --port 3000"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +19,7 @@
     "ndarray": "^1.0.19"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/jest": "^29.5.14",
     "@types/ndarray": "^1.0.14",
     "@types/node": "^22.10.0",
@@ -25,7 +28,8 @@
     "jest": "^30.4.2",
     "prettier": "^3.8.3",
     "ts-jest": "^29.2.5",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vite": "^8.0.13"
   },
   "jest": {
     "preset": "ts-jest",
@@ -42,7 +46,12 @@
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "transform": {
-      "^.+\\.tsx?$": ["ts-jest", { "diagnostics": false }]
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "diagnostics": false
+        }
+      ]
     }
   }
 }

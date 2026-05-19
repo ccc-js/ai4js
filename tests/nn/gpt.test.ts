@@ -1,5 +1,5 @@
-import { Tensor } from '../src/nn/tensor.js';
-import { Block, GPT } from '../src/nn/gpt.js';
+import { Tensor } from '../../src/nn/tensor.js';
+import { Block, GPT } from '../../src/nn/gpt.js';
 
 describe('v0.7: Transformer 區塊與 GPT 模型', () => {
   describe('Block', () => {

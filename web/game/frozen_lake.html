@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FrozenLake - ai4js</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      color: #fff;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 10px; color: #e9ecef; }
+    #gameCanvas {
+      border: 3px solid #495057;
+      border-radius: 8px;
+      background: #212529;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      padding: 10px 24px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+    }
+    button:hover { transform: translateY(-2px); }
+    button:active { transform: translateY(0); }
+    .btn-primary { background: #4dabf7; color: #1a1a2e; }
+    .btn-success { background: #51cf66; color: #1a1a2e; }
+    .btn-danger { background: #ff6b6b; color: #fff; }
+    .btn-warning { background: #ffd43b; color: #1a1a2e; }
+    .stats {
+      margin-top: 15px;
+      display: flex;
+      gap: 30px;
+      font-size: 1.1rem;
+    }
+    .stat { text-align: center; }
+    .stat-value { font-size: 2rem; font-weight: bold; color: #4dabf7; }
+    .stat-label { font-size: 0.85rem; color: #868e96; }
+    .legend {
+      margin-top: 20px;
+      display: flex;
+      gap: 20px;
+      font-size: 0.9rem;
+      color: #adb5bd;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-color { width: 16px; height: 16px; border-radius: 3px; }
+    .instructions {
+      margin-top: 20px;
+      padding: 15px 25px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #868e96;
+      text-align: center;
+    }
+    kbd {
+      background: #495057;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧊 FrozenLake</h1>
+  <canvas id="gameCanvas" width="450" height="450"></canvas>
+
+  <div class="controls">
+    <button class="btn-primary" id="resetBtn">Reset (R)</button>
+    <button class="btn-success" id="stepBtn">Step (S)</button>
+    <button class="btn-warning" id="autoBtn">Auto (A)</button>
+    <button class="btn-danger" id="stopBtn">Stop (Space)</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value" id="stepCount">0</div>
+      <div class="stat-label">Steps</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="reward">0</div>
+      <div class="stat-label">Reward</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="wins">0</div>
+      <div class="stat-label">Wins</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-color" style="background:#ffd43b"></div><span>Start</span></div>
+    <div class="legend-item"><div class="legend-color" style="background:#e9ecef"></div><span>Ice</span></div>
+    <div class="legend-item"><div class="legend-color" style="background:#495057"></div><span>Hole</span></div>
+    <div class="legend-item"><div class="legend-color" style="background:#51cf66"></div><span>Goal</span></div>
+    <div class="legend-item"><div class="legend-color" style="background:#ff6b6b;border-radius:50%"></div><span>Agent</span></div>
+  </div>
+
+  <div class="instructions">
+    <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or <kbd>WASD</kbd> to move | <kbd>S</kbd> Auto | <kbd>R</kbd> Reset
+  </div>
+
+  <script type="module">
+    import { createGame, createFrozenLakeRenderer } from '../../src/game/index.ts';
+    import { FrozenLake } from '../../src/gym/index.ts';
+
+    const game = createGame({
+      canvas: '#gameCanvas',
+      width: 450,
+      height: 450,
+      backgroundColor: { r: 0.13, g: 0.16, b: 0.24 }
+    });
+
+    const renderer = createFrozenLakeRenderer({ gridSize: 8, cellSize: 50 });
+    const env = new FrozenLake({ size: 8, max_steps: 100 });
+    renderer.init(game);
+
+    let state = env.reset();
+    let stepCount = 0;
+    let totalReward = 0;
+    let wins = 0;
+    let autoMode = false;
+    let animationId = null;
+
+    const stepCountEl = document.getElementById('stepCount');
+    const rewardEl = document.getElementById('reward');
+    const winsEl = document.getElementById('wins');
+
+    function updateUI() {
+      stepCountEl.textContent = stepCount;
+      rewardEl.textContent = totalReward.toFixed(1);
+      winsEl.textContent = wins;
+    }
+
+    function render() {
+      renderer.render(state);
+    }
+
+    function step(action) {
+      state = env.step(action);
+      stepCount++;
+      totalReward += state.reward;
+
+      if (state.done) {
+        if (state.info['success']) wins++;
+        updateUI();
+        render();
+        setTimeout(() => reset(), 1000);
+        return;
+      }
+
+      updateUI();
+      render();
+
+      if (autoMode) {
+        animationId = setTimeout(() => step(Math.floor(Math.random() * 4)), 150);
+      }
+    }
+
+    function reset() {
+      state = env.reset();
+      stepCount = 0;
+      totalReward = 0;
+      updateUI();
+      render();
+    }
+
+    function toggleAuto() {
+      autoMode = !autoMode;
+      document.getElementById('autoBtn').textContent = autoMode ? 'Pause (A)' : 'Auto (A)';
+      if (autoMode) step(Math.floor(Math.random() * 4));
+    }
+
+    document.getElementById('resetBtn').addEventListener('click', reset);
+    document.getElementById('stepBtn').addEventListener('click', () => step(Math.floor(Math.random() * 4)));
+    document.getElementById('autoBtn').addEventListener('click', toggleAuto);
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      autoMode = false;
+      document.getElementById('autoBtn').textContent = 'Auto (A)';
+    });
+
+    document.addEventListener('keydown', (e) => {
+      switch(e.key.toLowerCase()) {
+        case 'arrowup':
+        case 'w': step(0); break;
+        case 'arrowdown':
+        case 's':
+          if (e.key.length === 1) toggleAuto();
+          else step(1);
+          break;
+        case 'arrowleft':
+        case 'a': step(2); break;
+        case 'arrowright':
+        case 'd': step(3); break;
+        case 'r': reset(); break;
+        case ' ':
+          e.preventDefault();
+          autoMode = false;
+          document.getElementById('autoBtn').textContent = 'Auto (A)';
+          break;
+      }
+    });
+
+    game.start();
+    render();
+  </script>
+</body>
+</html>

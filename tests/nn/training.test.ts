@@ -1,5 +1,5 @@
-import { Tensor } from '../src/nn/tensor.js';
-import { Module, Linear, Adam, setSeed } from '../src/nn/nn.js';
+import { Tensor } from '../../src/nn/tensor.js';
+import { Module, Linear, Adam, setSeed } from '../../src/nn/nn.js';
 
 describe('Linear Regression', () => {
   beforeEach(() => setSeed(42));

@@ -1,5 +1,5 @@
-import { Tensor } from '../src/nn/tensor.js';
-import { Module, Linear, Embedding, RMSNorm, Adam } from '../src/nn/nn.js';
+import { Tensor } from '../../src/nn/tensor.js';
+import { Module, Linear, Embedding, RMSNorm, Adam } from '../../src/nn/nn.js';
 
 describe('v0.5: 正規化與優化器', () => {
   describe('RMSNorm', () => {
